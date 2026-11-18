@@ -116,3 +116,27 @@ The frontend called `/api/basin-grid` and parsed the response as JSON without ch
 - In the observed live response, all five requested points returned the same real provider values: US AQI 134, EAQI 61, PM2.5 52 µg/m³, and NO2 7.9 µg/m³ at 2026-11-18 23:30 local time. The route passes those values through; it does not fabricate directional variation. Model-cell selection/resolution can yield equal nearby estimates. [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api)
 - `npm run lint`, `npm run build`, and the existing automated suite (6 tests) passed after the fix. The build retains the existing large JavaScript bundle warning.
 - A real browser DevTools capture was unavailable; the exact same-origin request and response were exercised directly against the production-preview server. Upstream 429/5xx/timeout branches are implemented but were not forced against the live provider.
+
+## Google Sign-In follow-up — 19 November 2026
+
+### Findings
+
+- The client imports the Firebase web configuration, initializes `getAuth`, constructs `GoogleAuthProvider`, and calls `signInWithPopup`. `onAuthStateChanged` establishes the client session.
+- Authenticated API calls request `currentUser.getIdToken()` and send it in `Authorization: Bearer …`. Express routes for the user workspace require `verifyIdToken` before using the decoded UID.
+- Frontend and Admin SDK read the same `projectId` from `firebase-applet-config.json`. The project ID, auth domain, app ID, and sender ID are internally consistent. The web API key is client configuration and must not be treated as a private service-account key.
+- A live Firebase Identity Toolkit `accounts:createAuthUri` probe using the configured web key returned HTTP 200 and a Google `authUri`. This confirms the key is accepted by that endpoint; it does not prove that the active browser hostname is authorized or that a user can complete OAuth.
+- The original sign-in failure could not be reproduced because no authentication error was captured and a real account-selection flow was not completed. Firebase Console provider/domain settings are not readable from this repository.
+
+### Changes
+
+- Added code-specific actionable messages for popup blocked/closed, unauthorized domain, disabled provider, invalid API key/credential, and network failure. A blocked popup now falls back to Firebase redirect sign-in; redirect results and failures are processed on app load.
+- Kept strict Admin token verification. Missing/empty tokens and invalid tokens remain HTTP 401. Admin verification network/internal failures now return HTTP 503, with code-only server logs.
+- No credentials, service-account keys, mock tokens, or auth bypasses were added. Firestore rules were not weakened.
+
+### Verification and limitations
+
+- `npm run lint`, `npm run build`, and `npm test` passed (7 tests, including the seven requested client error mappings). The build still emits the large-bundle warning documented above.
+- Firebase Identity Toolkit probe: HTTP 200; `providerId=google.com`; an auth URI was returned. No account identity or credential was exposed in output.
+- Local protected workspace route: absent and empty bearer token returned 401; a forged token returned 401. A valid Firebase ID token was not available, so successful Admin verification and protected-feature access were not verified.
+- Real Google account selection, popup/redirect completion, browser console/network capture, and a successful ID-token-to-backend request remain **NOT VERIFIED**.
+- Before deployed use, check Firebase Console → Authentication → Sign-in method (Google enabled) and Authentication → Settings → Authorized domains (the actual production hostname). Also verify the Google OAuth web client/support email in the same Firebase project. Do not add a service-account private key to the frontend or repository; use deployment ADC/secret management for any Admin operations that require credentials.

@@ -6,7 +6,14 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth';
+import {
+  getRedirectResult,
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+  type User,
+} from 'firebase/auth';
 import {
   collection,
   deleteDoc,
@@ -26,6 +33,10 @@ import {
   handleFirestoreError,
   OperationType,
 } from '../lib/firebase';
+import {
+  getFirebaseAuthErrorCode,
+  getGoogleSignInErrorMessage,
+} from '../services/firebaseAuthErrors';
 
 export interface DbHouseholdProfile {
   id: number;
@@ -189,6 +200,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let unsubObservations: (() => void) | null = null;
 
+    void getRedirectResult(auth).catch((err: unknown) => {
+      console.warn('Google Sign-In redirect flow failed:', getFirebaseAuthErrorCode(err) ?? 'unknown');
+      setAuthError(getGoogleSignInErrorMessage(err));
+    });
+
     const unsubAuth = onAuthStateChanged(auth, async (nextUser) => {
       setUser(nextUser);
       setAuthReady(true);
@@ -280,7 +296,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await signInWithPopup(auth, googleAuthProvider);
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : 'Google Sign-In did not complete.');
+      if (getFirebaseAuthErrorCode(err) === 'auth/popup-blocked') {
+        try {
+          await signInWithRedirect(auth, googleAuthProvider);
+          return;
+        } catch (redirectError) {
+          console.warn(
+            'Google Sign-In redirect fallback failed:',
+            getFirebaseAuthErrorCode(redirectError) ?? 'unknown'
+          );
+          setAuthError(getGoogleSignInErrorMessage(redirectError));
+          return;
+        }
+      }
+
+      console.warn('Google Sign-In failed:', getFirebaseAuthErrorCode(err) ?? 'unknown');
+      setAuthError(getGoogleSignInErrorMessage(err));
     } finally {
       setAuthBusy(false);
     }

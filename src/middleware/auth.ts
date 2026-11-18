@@ -14,12 +14,27 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
   }
 
   const token = authHeader.slice('Bearer '.length).trim();
+  if (!token) {
+    res.status(401).json({ error: 'Unauthorized: Missing bearer token' });
+    return;
+  }
+
   try {
     const decoded = await adminAuth.verifyIdToken(token);
     req.user = decoded;
     next();
   } catch (error) {
-    console.error('Error verifying Firebase ID token:', error);
+    const code =
+      error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+        ? error.code
+        : 'unknown';
+    console.warn('Firebase ID token verification failed:', code);
+
+    if (code === 'app/network-error' || code === 'auth/internal-error') {
+      res.status(503).json({ error: 'Authentication verification is temporarily unavailable.' });
+      return;
+    }
+
     res.status(401).json({ error: 'Unauthorized: Invalid or expired session token' });
   }
 };

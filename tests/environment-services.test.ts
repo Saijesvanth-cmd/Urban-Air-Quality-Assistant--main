@@ -4,6 +4,7 @@ import { fetchOpenMeteoAirQuality } from '../src/services/airQualityService';
 import { searchLocations } from '../src/services/geocodingService';
 import { fetchOpenMeteoWeather } from '../src/services/weatherService';
 import { classifyEuropeanAqi, classifyUsAqi } from '../src/services/safetyRules';
+import { getGoogleSignInErrorMessage } from '../src/services/firebaseAuthErrors';
 
 const originalFetch = globalThis.fetch;
 
@@ -77,4 +78,20 @@ test('AQI classifications keep US EPA and European scales distinct', () => {
   assert.equal(classifyEuropeanAqi(61), 'Poor (EAQI 61–80)');
   assert.equal(classifyUsAqi(-1).band, 'Data unavailable');
   assert.equal(classifyEuropeanAqi(-1), 'Data unavailable');
+});
+
+test('Google Sign-In Firebase errors have actionable messages', () => {
+  const cases = [
+    ['auth/popup-blocked', /popup was blocked/i],
+    ['auth/popup-closed-by-user', /closed before it finished/i],
+    ['auth/unauthorized-domain', /authorized domains/i],
+    ['auth/operation-not-allowed', /enable the google provider/i],
+    ['auth/invalid-api-key', /API key/i],
+    ['auth/network-request-failed', /network connection/i],
+    ['auth/invalid-credential', /OAuth web client/i],
+  ] as const;
+
+  for (const [code, message] of cases) {
+    assert.match(getGoogleSignInErrorMessage({ code }), message);
+  }
 });
