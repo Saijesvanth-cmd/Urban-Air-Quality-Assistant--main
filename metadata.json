@@ -1,0 +1,8 @@
+{
+  "name": "Urban Air Quality Assistant",
+  "description": "Family-focused environmental health dashboard and AI advisory console for navigating severe winter smog episodes with live AQI tracking, household risk profiles, and PM2.5 mitigation planning.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

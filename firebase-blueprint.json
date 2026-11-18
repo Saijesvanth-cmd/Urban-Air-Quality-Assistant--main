@@ -1,0 +1,83 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated user profile linked to Firebase Auth UID",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "preferredCityId": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "displayName", "preferredCityId", "updatedAt"]
+    },
+    "SavedObservation": {
+      "title": "SavedObservation",
+      "description": "User-pinned neighborhood, air quality snapshot, or green-zone park saved to Firestore",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "placeName": {
+          "type": "string",
+          "maxLength": 140
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["green_zone", "sensor_station", "neighborhood"]
+        },
+        "cityName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "aqi": {
+          "type": "number"
+        },
+        "pm25": {
+          "type": "number"
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 280
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["uid", "placeName", "kind", "cityName", "aqi", "pm25", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Owner-only user profile preferences document."
+    },
+    "/users/{userId}/observations/{observationId}": {
+      "schema": {
+        "$ref": "#/entities/SavedObservation"
+      },
+      "description": "Owner-only pinned green zones, neighborhoods, and air station observations."
+    }
+  }
+}
