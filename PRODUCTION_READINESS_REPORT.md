@@ -94,3 +94,25 @@ No redesign, theme, layout, typography, spacing, navigation, animation, or compo
 ## 9. Deployment decision
 
 **NOT READY FOR PRODUCTION** — local code checks and core environmental API tests pass, but essential connected-service configuration, canonical-lockfile security verification, hosted HTTPS/runtime configuration, and browser/responsive regression coverage remain unverified.
+
+## Spatial Grid follow-up — 18 November 2026
+
+### Root cause
+
+The frontend called `/api/basin-grid` and parsed the response as JSON without checking its media type. The `preview` script ran Vite’s static-only preview server, which had no Express API route; Vite served the SPA HTML shell with HTTP 200 for the missing API path. Parsing that HTML rejected, and the component mislabeled the parse failure as “Network unavailable reaching spatial dispersion endpoint.” The Express route itself existed and its Open-Meteo URL was valid.
+
+### Fixes
+
+- `package.json`: `npm run preview` now starts the Express server in production mode so built assets and `/api/*` routes share the same origin.
+- `server.ts`: production mode can be selected with `--production`; the grid route validates all five coordinates, wraps longitude at the dateline, rejects polar grids that would exceed valid latitude, applies an upstream timeout, checks for exactly five structured provider rows, handles malformed JSON and upstream failures explicitly, logs failures, and disables HTTP caching.
+- `src/components/AtmosphericMapSection.tsx`: requests bypass browser caching, have a 10-second timeout and cancellation on location changes/unmount, require JSON and a complete valid five-bearing response, and show actionable errors for static HTML/missing-server responses. It still renders only returned provider measurements; missing/invalid numeric values remain unavailable.
+
+### Verification
+
+- Reproduced the failure before the fix: Vite preview returned HTTP 200 `text/html` for `/api/basin-grid?lat=17.456&lon=78.444`.
+- Tested the corrected `npm run preview`: the root page returned HTTP 200 and the same-origin grid endpoint returned HTTP 200 `application/json` with `Cache-Control: no-store`.
+- The exact upstream request used `https://air-quality-api.open-meteo.com/v1/air-quality` with five comma-separated latitude and longitude values, `current=us_aqi,european_aqi,pm2_5,nitrogen_dioxide`, and `timezone=auto`. Open-Meteo returned HTTP 200 and five rows. The backend returned the five expected bearings (`CORE`, `NW`, `NE`, `SE`, `SW`) with valid coordinates.
+- Two repeated preview requests each reached the route and returned HTTP 200 with fresh route timestamps. Invalid center and polar-grid requests returned HTTP 400.
+- In the observed live response, all five requested points returned the same real provider values: US AQI 134, EAQI 61, PM2.5 52 µg/m³, and NO2 7.9 µg/m³ at 2026-11-18 23:30 local time. The route passes those values through; it does not fabricate directional variation. Model-cell selection/resolution can yield equal nearby estimates. [Open-Meteo Air Quality API](https://open-meteo.com/en/docs/air-quality-api)
+- `npm run lint`, `npm run build`, and the existing automated suite (6 tests) passed after the fix. The build retains the existing large JavaScript bundle warning.
+- A real browser DevTools capture was unavailable; the exact same-origin request and response were exercised directly against the production-preview server. Upstream 429/5xx/timeout branches are implemented but were not forced against the live provider.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BookmarkPlus,
   Compass,
@@ -25,6 +25,27 @@ interface BasinSectorNode {
 
 interface AtmosphericMapSectionProps {
   location: ActiveLocation;
+}
+
+function isBasinSectorNode(value: unknown): value is BasinSectorNode {
+  if (!value || typeof value !== 'object') return false;
+  const node = value as Partial<BasinSectorNode>;
+  const validMeasurement = (measurement: unknown) =>
+    measurement === null ||
+    (typeof measurement === 'number' && Number.isFinite(measurement) && measurement >= 0);
+
+  return (
+    typeof node.id === 'string' &&
+    typeof node.label === 'string' &&
+    typeof node.bearing === 'string' &&
+    typeof node.lat === 'number' && Number.isFinite(node.lat) && node.lat >= -90 && node.lat <= 90 &&
+    typeof node.lon === 'number' && Number.isFinite(node.lon) && node.lon >= -180 && node.lon <= 180 &&
+    validMeasurement(node.usAqi) &&
+    validMeasurement(node.europeanAqi) &&
+    validMeasurement(node.pm25) &&
+    validMeasurement(node.no2) &&
+    (typeof node.apiTime === 'string' || node.apiTime === null)
+  );
 }
 
 const SECTOR_POSITIONS: Record<string, { x: number; y: number }> = {
@@ -58,37 +79,72 @@ export function AtmosphericMapSection({ location }: AtmosphericMapSectionProps) 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [saveFeedback, setSaveFeedback] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const requestControllerRef = useRef<AbortController | null>(null);
 
   const fetchBasinGrid = useCallback(async () => {
+    requestControllerRef.current?.abort();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 10000);
     setLoading(true);
     setErrorMsg(null);
     try {
       const resp = await fetch(
-        `/api/basin-grid?lat=${encodeURIComponent(location.lat)}&lon=${encodeURIComponent(location.lon)}`
+        `/api/basin-grid?lat=${encodeURIComponent(location.lat)}&lon=${encodeURIComponent(location.lon)}`,
+        { signal: controller.signal, cache: 'no-store', headers: { Accept: 'application/json' } }
       );
+      if (!resp.headers.get('content-type')?.toLowerCase().includes('application/json')) {
+        throw new Error(
+          `Spatial grid endpoint returned a non-JSON response (HTTP ${resp.status}). Start the Express app with npm run dev or npm run preview.`
+        );
+      }
       const data = (await resp.json()) as {
         nodes?: BasinSectorNode[];
         fetchedAt?: string;
         error?: string;
       };
       if (!resp.ok) {
-        setErrorMsg(data.error || 'Unable to query Open-Meteo spatial dispersion grid.');
-        setNodes([]);
-        return;
+        throw new Error(data.error || `Spatial grid request failed (HTTP ${resp.status}).`);
       }
-      setNodes(Array.isArray(data.nodes) ? data.nodes : []);
+      const expectedBearings = new Set(['CORE', 'NW', 'NE', 'SE', 'SW']);
+      if (
+        !Array.isArray(data.nodes) ||
+        data.nodes.length !== expectedBearings.size ||
+        data.nodes.some((node) => !isBasinSectorNode(node)) ||
+        new Set(data.nodes.map((node) => node.bearing)).size !== expectedBearings.size ||
+        data.nodes.some((node) => !expectedBearings.has(node.bearing))
+      ) {
+        throw new Error('Spatial grid endpoint returned incomplete or invalid five-sector data.');
+      }
+      setNodes(data.nodes);
       setFetchedAt(data.fetchedAt ?? null);
       setSelectedNodeId('sector-center');
-    } catch {
-      setErrorMsg('Network unavailable reaching spatial dispersion endpoint.');
+    } catch (err) {
+      if (requestControllerRef.current !== controller) return;
+      const message = controller.signal.aborted
+        ? 'Spatial grid request timed out. Retry the grid or check the server connection.'
+        : err instanceof TypeError
+          ? 'Could not connect to /api/basin-grid. Ensure the Express server is running.'
+          : err instanceof Error
+            ? err.message
+            : 'Unable to load spatial dispersion estimates.';
+      setErrorMsg(message);
       setNodes([]);
     } finally {
-      setLoading(false);
+      window.clearTimeout(timeout);
+      if (requestControllerRef.current === controller) {
+        requestControllerRef.current = null;
+        setLoading(false);
+      }
     }
   }, [location.lat, location.lon]);
 
   useEffect(() => {
     void fetchBasinGrid();
+    return () => {
+      requestControllerRef.current?.abort();
+      requestControllerRef.current = null;
+    };
   }, [fetchBasinGrid]);
 
   const activeNode = nodes.find((n) => n.id === selectedNodeId) ?? nodes[0] ?? null;

@@ -21,6 +21,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
+const isProduction = process.env.NODE_ENV === 'production' || process.argv.includes('--production');
 const NOMINATIM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const NOMINATIM_MIN_INTERVAL_MS = 1100;
 const nominatimCache = new Map<string, { expiresAt: number; data: ReverseGeocodeData }>();
@@ -206,7 +207,14 @@ async function startServer() {
   app.get('/api/reverse-geocode', async (req, res) => {
     const lat = Number(req.query.lat);
     const lon = Number(req.query.lon);
-    if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) {
+    if (
+      !Number.isFinite(lat) ||
+      lat < -90 ||
+      lat > 90 ||
+      !Number.isFinite(lon) ||
+      lon < -180 ||
+      lon > 180
+    ) {
       res.status(400).json({ error: 'Valid lat and lon are required.' });
       return;
     }
@@ -290,6 +298,7 @@ async function startServer() {
 
   // Zero-cost multi-coordinate Open-Meteo spatial basin dispersion grid (no Google Maps, no API keys)
   app.get('/api/basin-grid', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
     const lat = Number(req.query.lat);
     const lon = Number(req.query.lon);
     if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lon) || lon < -180 || lon > 180) {
@@ -309,52 +318,82 @@ async function startServer() {
         { id: 'sector-sw', label: 'Southwest Sector (~5 km)', bearing: 'SW', dLat: -0.036, dLon: -0.036 },
       ];
 
-      const latitudes = sectors.map((s) => (lat + s.dLat).toFixed(4)).join(',');
-      const longitudes = sectors.map((s) => (lon + s.dLon).toFixed(4)).join(',');
+      const gridCoordinates = sectors.map((sector) => {
+        const gridLat = Number((lat + sector.dLat).toFixed(4));
+        const rawLon = lon + sector.dLon;
+        const gridLon = Number((((rawLon + 180) % 360 + 360) % 360 - 180).toFixed(4));
+        return { lat: gridLat, lon: gridLon };
+      });
+      if (gridCoordinates.some((point) => point.lat < -90 || point.lat > 90)) {
+        res.status(400).json({
+          error: 'The five-sector grid would extend beyond the valid latitude range.',
+        });
+        return;
+      }
+
+      const latitudes = gridCoordinates.map((point) => point.lat.toFixed(4)).join(',');
+      const longitudes = gridCoordinates.map((point) => point.lon.toFixed(4)).join(',');
 
       const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latitudes}&longitude=${longitudes}&current=us_aqi,european_aqi,pm2_5,nitrogen_dioxide&timezone=auto`;
       const resp = await fetch(url, { signal: controller.signal });
 
       if (resp.status === 429) {
+        console.warn(`[basin-grid] Open-Meteo rate limited the request (${resp.status}).`);
         res.status(429).json({ error: 'Open-Meteo air-quality rate limit reached. Retry shortly.' });
         return;
       }
       if (!resp.ok) {
+        console.warn(`[basin-grid] Open-Meteo returned HTTP ${resp.status}.`);
         res.status(502).json({ error: `Open-Meteo spatial grid returned HTTP ${resp.status}.` });
         return;
       }
 
-      const raw = (await resp.json()) as
-        | Array<{
-            current?: {
-              time?: string;
-              us_aqi?: number | null;
-              european_aqi?: number | null;
-              pm2_5?: number | null;
-              nitrogen_dioxide?: number | null;
-            };
-          }>
-        | {
-            current?: {
-              time?: string;
-              us_aqi?: number | null;
-              european_aqi?: number | null;
-              pm2_5?: number | null;
-              nitrogen_dioxide?: number | null;
-            };
-          };
+      let raw: unknown;
+      try {
+        raw = await resp.json();
+      } catch {
+        console.error('[basin-grid] Open-Meteo returned malformed JSON.');
+        res.status(502).json({ error: 'Open-Meteo returned malformed spatial-grid data.' });
+        return;
+      }
 
       const rows = Array.isArray(raw) ? raw : [raw];
+      if (
+        rows.length !== sectors.length ||
+        rows.some(
+          (row) =>
+            !row ||
+            typeof row !== 'object' ||
+            !('current' in row) ||
+            !row.current ||
+            typeof row.current !== 'object'
+        )
+      ) {
+        console.error(`[basin-grid] Invalid Open-Meteo payload: expected ${sectors.length} coordinate rows.`);
+        res.status(502).json({ error: 'Open-Meteo returned an incomplete spatial-grid response.' });
+        return;
+      }
+
+      const typedRows = rows as Array<{
+        current: {
+          time?: string;
+          us_aqi?: number | null;
+          european_aqi?: number | null;
+          pm2_5?: number | null;
+          nitrogen_dioxide?: number | null;
+        };
+      }>;
+
       const nodes = sectors.map((sec, i) => {
-        const cur = rows[i]?.current;
+        const cur = typedRows[i].current;
         const toNullNum = (v: unknown) =>
-          typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 10) / 10 : null;
+          typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.round(v * 10) / 10 : null;
         return {
           id: sec.id,
           label: sec.label,
           bearing: sec.bearing,
-          lat: Number((lat + sec.dLat).toFixed(4)),
-          lon: Number((lon + sec.dLon).toFixed(4)),
+          lat: gridCoordinates[i].lat,
+          lon: gridCoordinates[i].lon,
           usAqi: toNullNum(cur?.us_aqi),
           europeanAqi: toNullNum(cur?.european_aqi),
           pm25: toNullNum(cur?.pm2_5),
@@ -370,6 +409,9 @@ async function startServer() {
         nodes,
       });
     } catch (error) {
+      console.error(
+        `[basin-grid] Upstream request failed (${error instanceof Error ? error.name : 'unknown error'}).`
+      );
       res.status(503).json({
         error:
           error instanceof Error && error.name === 'AbortError'
@@ -680,7 +722,7 @@ async function startServer() {
     }
   });
 
-  if (process.env.NODE_ENV !== 'production') {
+  if (!isProduction) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
