@@ -1,4 +1,3 @@
-
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "express",
@@ -9,7 +8,7 @@
     "server.js": {
       "includeFiles": [
         "server.bundle.js",
-        "public/index.html"
+        "public/**"
       ]
     }
   }
