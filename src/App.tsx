@@ -21,6 +21,7 @@ import {
   computeSaferActivityWindow,
 } from './services/safetyRules';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { apiUrl } from './services/apiClient';
 import { AtmosphereScene } from './components/AtmosphereScene';
 import { Navbar } from './components/Navbar';
 import { HeroSection } from './components/HeroSection';
@@ -448,7 +449,7 @@ function DashboardApp() {
     }
 
     try {
-      const response = await fetch('/api/chat', {
+      const response = await fetch(apiUrl('/api/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

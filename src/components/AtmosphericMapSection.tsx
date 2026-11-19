@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type { ActiveLocation } from '../types/environment';
 import { useAuth } from '../context/AuthContext';
+import { apiUrl, readApiResponse } from '../services/apiClient';
 
 interface BasinSectorNode {
   id: string;
@@ -90,22 +91,14 @@ export function AtmosphericMapSection({ location }: AtmosphericMapSectionProps) 
     setErrorMsg(null);
     try {
       const resp = await fetch(
-        `/api/basin-grid?lat=${encodeURIComponent(location.lat)}&lon=${encodeURIComponent(location.lon)}`,
+        apiUrl(`/api/basin-grid?lat=${encodeURIComponent(location.lat)}&lon=${encodeURIComponent(location.lon)}`),
         { signal: controller.signal, cache: 'no-store', headers: { Accept: 'application/json' } }
       );
-      if (!resp.headers.get('content-type')?.toLowerCase().includes('application/json')) {
-        throw new Error(
-          `Spatial grid endpoint returned a non-JSON response (HTTP ${resp.status}). Start the Express app with npm run dev or npm run preview.`
-        );
-      }
-      const data = (await resp.json()) as {
+      const data = await readApiResponse<{
         nodes?: BasinSectorNode[];
         fetchedAt?: string;
         error?: string;
-      };
-      if (!resp.ok) {
-        throw new Error(data.error || `Spatial grid request failed (HTTP ${resp.status}).`);
-      }
+      }>(resp);
       const expectedBearings = new Set(['CORE', 'NW', 'NE', 'SE', 'SW']);
       if (
         !Array.isArray(data.nodes) ||
@@ -124,7 +117,7 @@ export function AtmosphericMapSection({ location }: AtmosphericMapSectionProps) 
       const message = controller.signal.aborted
         ? 'Spatial grid request timed out. Retry the grid or check the server connection.'
         : err instanceof TypeError
-          ? 'Could not connect to /api/basin-grid. Ensure the Express server is running.'
+          ? 'Could not connect to the basin grid API. Check the API host and server availability.'
           : err instanceof Error
             ? err.message
             : 'Unable to load spatial dispersion estimates.';

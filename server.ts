@@ -195,6 +195,17 @@ async function startServer() {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(), microphone=()');
+    const configuredOrigin = process.env.CORS_ORIGIN?.replace(/\/$/, '');
+    if (configuredOrigin && _req.headers.origin === configuredOrigin) {
+      res.setHeader('Access-Control-Allow-Origin', configuredOrigin);
+      res.setHeader('Vary', 'Origin');
+      res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, Accept');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+    }
+    if (_req.method === 'OPTIONS') {
+      res.sendStatus(204);
+      return;
+    }
     next();
   });
   app.use(express.json({ limit: '1mb' }));
@@ -507,7 +518,11 @@ async function startServer() {
       return;
     }
     try {
-      await deleteHouseholdProfile(req.user!.uid, id);
+      const deleted = await deleteHouseholdProfile(req.user!.uid, id);
+      if (!deleted) {
+        res.status(404).json({ error: 'Household profile not found.' });
+        return;
+      }
       res.json({ deleted: true });
     } catch (error) {
       res.status(500).json({

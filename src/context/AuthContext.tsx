@@ -37,6 +37,7 @@ import {
   getFirebaseAuthErrorCode,
   getGoogleSignInErrorMessage,
 } from '../services/firebaseAuthErrors';
+import { apiUrl, readApiResponse } from '../services/apiClient';
 
 export interface DbHouseholdProfile {
   id: number;
@@ -179,13 +180,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setDbError(null);
     try {
       const token = await current.getIdToken();
-      const resp = await fetch('/api/user/workspace', {
+      const resp = await fetch(apiUrl('/api/user/workspace'), {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const data = await resp.json();
-      if (!resp.ok) {
-        throw new Error(data.error || 'Failed to sync PostgreSQL workspace.');
-      }
+      const data = await readApiResponse<{ profiles?: DbHouseholdProfile[]; queries?: DbSearchQuery[]; routines?: DbCustomRoutine[] }>(resp);
       setDbProfiles(Array.isArray(data.profiles) ? data.profiles : []);
       setDbQueries(Array.isArray(data.queries) ? data.queries : []);
       setDbRoutines(Array.isArray(data.routines) ? data.routines : []);
@@ -336,7 +334,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }) => {
       const token = await getAuthToken();
       if (!token) throw new Error('Sign in with Google to save profiles to PostgreSQL.');
-      const resp = await fetch('/api/user/profiles', {
+      const resp = await fetch(apiUrl('/api/user/profiles'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -344,8 +342,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify(input),
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Failed to save household profile.');
+      await readApiResponse<DbHouseholdProfile>(resp);
       await refreshWorkspace();
     },
     [getAuthToken, refreshWorkspace]
@@ -355,11 +352,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (id: number) => {
       const token = await getAuthToken();
       if (!token) return;
-      const resp = await fetch(`/api/user/profiles/${id}/activate`, {
+      const resp = await fetch(apiUrl(`/api/user/profiles/${id}/activate`), {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (resp.ok) await refreshWorkspace();
+      await readApiResponse<DbHouseholdProfile>(resp);
+      await refreshWorkspace();
     },
     [getAuthToken, refreshWorkspace]
   );
@@ -368,11 +366,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (id: number) => {
       const token = await getAuthToken();
       if (!token) return;
-      const resp = await fetch(`/api/user/profiles/${id}`, {
+      const resp = await fetch(apiUrl(`/api/user/profiles/${id}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (resp.ok) await refreshWorkspace();
+      await readApiResponse<{ deleted: boolean }>(resp);
+      await refreshWorkspace();
     },
     [getAuthToken, refreshWorkspace]
   );
@@ -389,7 +388,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }) => {
       const token = await getAuthToken();
       if (!token) return;
-      const resp = await fetch('/api/user/queries', {
+      const resp = await fetch(apiUrl('/api/user/queries'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -406,7 +405,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (input: { title: string; category: string; pm25ReductionUg: number }) => {
       const token = await getAuthToken();
       if (!token) throw new Error('Sign in with Google to save custom routines.');
-      const resp = await fetch('/api/user/routines', {
+      const resp = await fetch(apiUrl('/api/user/routines'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -414,8 +413,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify(input),
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data.error || 'Failed to add custom routine.');
+      await readApiResponse<DbCustomRoutine>(resp);
       await refreshWorkspace();
     },
     [getAuthToken, refreshWorkspace]
@@ -425,7 +423,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (id: number, enabled: boolean) => {
       const token = await getAuthToken();
       if (!token) return;
-      const resp = await fetch(`/api/user/routines/${id}`, {
+      const resp = await fetch(apiUrl(`/api/user/routines/${id}`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -433,7 +431,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({ enabled }),
       });
-      if (resp.ok) await refreshWorkspace();
+      await readApiResponse<DbCustomRoutine>(resp);
+      await refreshWorkspace();
     },
     [getAuthToken, refreshWorkspace]
   );
@@ -442,11 +441,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (id: number) => {
       const token = await getAuthToken();
       if (!token) return;
-      const resp = await fetch(`/api/user/routines/${id}`, {
+      const resp = await fetch(apiUrl(`/api/user/routines/${id}`), {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (resp.ok) await refreshWorkspace();
+      await readApiResponse<{ deleted: boolean }>(resp);
+      await refreshWorkspace();
     },
     [getAuthToken, refreshWorkspace]
   );

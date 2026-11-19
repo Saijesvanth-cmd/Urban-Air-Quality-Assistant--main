@@ -1,3 +1,5 @@
+import { apiUrl } from './apiClient';
+
 export type GeolocationErrorCode =
   | 'UNSUPPORTED'
   | 'PERMISSION_DENIED'
@@ -99,7 +101,7 @@ export async function detectBrowserLocation(): Promise<DetectedCoordinates> {
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3500);
-    const resp = await fetch(`/api/reverse-geocode?lat=${lat}&lon=${lon}`, {
+    const resp = await fetch(apiUrl(`/api/reverse-geocode?lat=${lat}&lon=${lon}`), {
       signal: controller.signal,
     });
     clearTimeout(timer);
