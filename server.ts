@@ -447,9 +447,7 @@ async function configureApp(app: express.Express) {
       res.json(workspace);
     } catch (error) {
       console.error('Failed to load user workspace:', error);
-      res.status(500).json({
-        error: error instanceof Error ? error.message : 'Failed to load household workspace.',
-      });
+      res.status(500).json({ error: 'Failed to load household workspace.' });
     }
   });
 
@@ -495,9 +493,7 @@ async function configureApp(app: express.Express) {
       res.status(201).json(created);
     } catch (error) {
       console.error('Failed to create household profile:', error);
-      res.status(500).json({
-        error: error instanceof Error ? error.message : 'Failed to save household profile.',
-      });
+      res.status(500).json({ error: 'Failed to save household profile.' });
     }
   });
 
@@ -515,9 +511,7 @@ async function configureApp(app: express.Express) {
       }
       res.json(updated);
     } catch (error) {
-      res.status(500).json({
-        error: error instanceof Error ? error.message : 'Failed to activate profile.',
-      });
+      res.status(500).json({ error: 'Failed to activate profile.' });
     }
   });
 
@@ -535,9 +529,7 @@ async function configureApp(app: express.Express) {
       }
       res.json({ deleted: true });
     } catch (error) {
-      res.status(500).json({
-        error: error instanceof Error ? error.message : 'Failed to delete profile.',
-      });
+      res.status(500).json({ error: 'Failed to delete profile.' });
     }
   });
 
@@ -575,9 +567,7 @@ async function configureApp(app: express.Express) {
 
       res.status(201).json(saved);
     } catch (error) {
-      res.status(500).json({
-        error: error instanceof Error ? error.message : 'Failed to save query history.',
-      });
+      res.status(500).json({ error: 'Failed to save query history.' });
     }
   });
 
@@ -607,9 +597,7 @@ async function configureApp(app: express.Express) {
 
       res.status(201).json(saved);
     } catch (error) {
-      res.status(500).json({
-        error: error instanceof Error ? error.message : 'Failed to add custom routine.',
-      });
+      res.status(500).json({ error: 'Failed to add custom routine.' });
     }
   });
 
@@ -628,9 +616,7 @@ async function configureApp(app: express.Express) {
       }
       res.json(updated);
     } catch (error) {
-      res.status(500).json({
-        error: error instanceof Error ? error.message : 'Failed to toggle custom routine.',
-      });
+      res.status(500).json({ error: 'Failed to toggle custom routine.' });
     }
   });
 
@@ -644,9 +630,7 @@ async function configureApp(app: express.Express) {
       await deleteCustomRoutine(req.user!.uid, id);
       res.json({ deleted: true });
     } catch (error) {
-      res.status(500).json({
-        error: error instanceof Error ? error.message : 'Failed to delete custom routine.',
-      });
+      res.status(500).json({ error: 'Failed to delete custom routine.' });
     }
   });
 

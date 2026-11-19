@@ -4,7 +4,7 @@
 
 Import the repository root (`.`) as one Vercel project. `vercel.json` selects Vercel's native Express framework, installs from the checked-in Bun lockfile, and runs the Vite production build. Keep **Output Directory** unset: Vite writes generated frontend files into the root `public/` directory, which Vercel serves through its CDN. The Express app is the default export in root `server.ts`; no separate API functions or API rewrites are needed. Do not set `VITE_API_BASE_URL` for this combined same-origin deployment.
 
-Use a Node.js runtime supported by the current Vercel Express framework (Node 20 or later). The app uses Node APIs and Node PostgreSQL driver. `vercel dev` is the production-like local runner; run the build first so `public/index.html` exists.
+Use Node.js 24.x for the Vercel runtime (also pinned in `package.json`). The app uses Node APIs and the Node PostgreSQL driver. `vercel dev` is the production-like local runner; run the build first so `public/index.html` exists.
 
 ## Vercel environment variables
 
@@ -28,7 +28,7 @@ Create or migrate the PostgreSQL schema before testing profile operations. The a
 
 ## Deploy and verify
 
-1. In Vercel project settings, set **Framework Preset: Express**, **Root Directory: `.`**, and leave the **Output Directory** empty. The build and install commands are already in `vercel.json` (`bun install --frozen-lockfile`, `bun run build`).
+1. In Vercel project settings, set **Framework Preset: Express**, **Root Directory: `.`**, **Node.js Version: 24.x**, and leave the **Output Directory** empty. The build and install commands are already in `vercel.json` (`bun install --frozen-lockfile`, `bun run build`).
 2. Add the environment variables above, especially `FIREBASE_SERVICE_ACCOUNT` and the four PostgreSQL settings. Confirm Google sign-in's authorized domain includes the Vercel production hostname in Firebase Authentication.
 3. Deploy a Preview, then verify `GET /api/health` returns JSON `{ "status": "ok" }`; `GET /api/basin-grid?lat=17.456&lon=78.444` returns five nodes; and root assets return successfully. A random browser route should return the SPA HTML while an unknown `/api/...` route returns JSON 404.
 4. Sign in with Google and verify `GET /api/user/workspace` and `GET /api/user/profiles` with `Authorization: Bearer <Firebase ID token>`. Create, list, activate, and delete a test profile, then remove the test data if needed.
