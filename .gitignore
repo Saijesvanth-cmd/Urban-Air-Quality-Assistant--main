@@ -1,6 +1,7 @@
 node_modules/
 build/
 dist/
+server.bundle.js
 coverage/
 .DS_Store
 *.log

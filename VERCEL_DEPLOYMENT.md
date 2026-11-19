@@ -2,9 +2,9 @@
 
 ## Project settings
 
-Import the repository root (`.`) as one Vercel project. `vercel.json` selects Vercel's native Express framework, installs from the checked-in Bun lockfile, and runs the Vite production build. Keep **Output Directory** unset: Vite writes generated frontend files into the root `public/` directory, which Vercel serves through its CDN. The Express app is the default export in root `server.ts`; no separate API functions or API rewrites are needed. Do not set `VITE_API_BASE_URL` for this combined same-origin deployment.
+Import the repository root (`.`) as one Vercel project. `vercel.json` selects Vercel's native Express framework, installs from the checked-in Bun lockfile, and runs the Vite frontend build plus an esbuild backend bundle. Keep **Output Directory** unset: Vite writes generated frontend files into the root `public/` directory, which Vercel serves through its CDN. The root `server.js` exports the bundled Express app; no separate API functions or API rewrites are needed. Do not set `VITE_API_BASE_URL` for this combined same-origin deployment.
 
-Use Node.js 24.x for the Vercel runtime (also pinned in `package.json`). The app uses Node APIs and the Node PostgreSQL driver. `vercel dev` is the production-like local runner; run the build first so `public/index.html` exists.
+Use Node.js 24.x for the Vercel runtime (also pinned in `package.json`). The app uses Node APIs and the Node PostgreSQL driver. `vercel dev` is the production-like local runner; run the build first so `public/index.html` and `server.bundle.js` exist.
 
 ## Vercel environment variables
 

@@ -1,13 +1,6 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const firebaseConfig = JSON.parse(
-  readFileSync(path.resolve(__dirname, '../../firebase-applet-config.json'), 'utf8')
-) as { projectId: string };
+import firebaseConfig from '../../firebase-applet-config.json' with { type: 'json' };
 
 if (!getApps().length) {
   if (process.env.VERCEL === '1' && !process.env.FIREBASE_SERVICE_ACCOUNT) {

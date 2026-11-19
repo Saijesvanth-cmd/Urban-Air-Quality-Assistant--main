@@ -6,10 +6,9 @@
   "installCommand": "bun install --frozen-lockfile",
   "buildCommand": "bun run build",
   "functions": {
-    "server.ts": {
+    "server.js": {
       "includeFiles": [
-        "src/**/*.ts",
-        "firebase-applet-config.json",
+        "server.bundle.js",
         "public/index.html"
       ]
     }
