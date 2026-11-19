@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "express",
+  "bunVersion": "1.x",
+  "installCommand": "bun install --frozen-lockfile",
+  "buildCommand": "bun run build",
+  "functions": {
+    "server.ts": {
+      "includeFiles": [
+        "public/index.html",
+        "firebase-applet-config.json"
+      ]
+    }
+  }
+}

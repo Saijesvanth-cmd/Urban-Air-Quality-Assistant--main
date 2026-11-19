@@ -9,7 +9,7 @@ export default defineConfig(() => {
     plugins: [
       react(),
       tailwindcss(),
-      // Copies src/assets into dist/ so root-relative URLs like
+      // Copies unbundled images and the source favicon into Vercel's public CDN tree.
       // "/src/assets/images/..." (e.g. generate_image output) still resolve
       // in production builds. Do not remove.
       {
@@ -19,11 +19,15 @@ export default defineConfig(() => {
           if (error) {
             return;
           }
-          const distDir = path.resolve(__dirname, 'dist');
+          const publicDir = path.resolve(__dirname, 'public');
           const srcAssets = path.resolve(__dirname, 'src/assets');
-          const distAssets = path.resolve(distDir, 'src/assets');
-          if (fs.existsSync(distDir) && fs.existsSync(srcAssets)) {
-            fs.cpSync(srcAssets, distAssets, {recursive: true, force: true});
+          const publicAssets = path.resolve(publicDir, 'src/assets');
+          const favicon = path.resolve(__dirname, 'favicon.ico');
+          if (fs.existsSync(publicDir) && fs.existsSync(srcAssets)) {
+            fs.cpSync(srcAssets, publicAssets, {recursive: true, force: true});
+          }
+          if (fs.existsSync(publicDir) && fs.existsSync(favicon)) {
+            fs.copyFileSync(favicon, path.resolve(publicDir, 'favicon.ico'));
           }
         },
       },
@@ -39,6 +43,12 @@ export default defineConfig(() => {
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    },
+    // Vercel's Express deployment serves public/** through its CDN.
+    publicDir: false as const,
+    build: {
+      outDir: 'public',
+      emptyOutDir: true,
     },
   };
 });

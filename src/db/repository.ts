@@ -69,25 +69,27 @@ export async function createHouseholdProfile(input: {
   notes?: string;
 }) {
   try {
-    await db
-      .update(householdProfiles)
-      .set({ isActive: false })
-      .where(eq(householdProfiles.userUid, input.userUid));
+    return await db.transaction(async (tx) => {
+      await tx
+        .update(householdProfiles)
+        .set({ isActive: false })
+        .where(eq(householdProfiles.userUid, input.userUid));
 
-    const inserted = await db
-      .insert(householdProfiles)
-      .values({
-        userUid: input.userUid,
-        profileName: input.profileName.slice(0, 100),
-        demographics: input.demographics.slice(0, 220),
-        sensitivityLevel: input.sensitivityLevel.slice(0, 60),
-        safeIndoorPm25Target: Math.max(5, Math.min(100, Math.round(input.safeIndoorPm25Target))),
-        notes: (input.notes ?? '').slice(0, 320),
-        isActive: true,
-      })
-      .returning();
+      const inserted = await tx
+        .insert(householdProfiles)
+        .values({
+          userUid: input.userUid,
+          profileName: input.profileName.slice(0, 100),
+          demographics: input.demographics.slice(0, 220),
+          sensitivityLevel: input.sensitivityLevel.slice(0, 60),
+          safeIndoorPm25Target: Math.max(5, Math.min(100, Math.round(input.safeIndoorPm25Target))),
+          notes: (input.notes ?? '').slice(0, 320),
+          isActive: true,
+        })
+        .returning();
 
-    return inserted[0];
+      return inserted[0];
+    });
   } catch (error) {
     console.error('Database error in createHouseholdProfile:', error);
     throw new Error('Unable to save household profile.', { cause: error });
@@ -96,18 +98,27 @@ export async function createHouseholdProfile(input: {
 
 export async function activateHouseholdProfile(userUid: string, profileId: number) {
   try {
-    await db
-      .update(householdProfiles)
-      .set({ isActive: false })
-      .where(eq(householdProfiles.userUid, userUid));
+    return await db.transaction(async (tx) => {
+      const [target] = await tx
+        .select({ id: householdProfiles.id })
+        .from(householdProfiles)
+        .where(and(eq(householdProfiles.id, profileId), eq(householdProfiles.userUid, userUid)))
+        .limit(1);
+      if (!target) return null;
 
-    const updated = await db
-      .update(householdProfiles)
-      .set({ isActive: true, updatedAt: new Date() })
-      .where(and(eq(householdProfiles.id, profileId), eq(householdProfiles.userUid, userUid)))
-      .returning();
+      await tx
+        .update(householdProfiles)
+        .set({ isActive: false })
+        .where(eq(householdProfiles.userUid, userUid));
 
-    return updated[0] ?? null;
+      const updated = await tx
+        .update(householdProfiles)
+        .set({ isActive: true, updatedAt: new Date() })
+        .where(and(eq(householdProfiles.id, profileId), eq(householdProfiles.userUid, userUid)))
+        .returning();
+
+      return updated[0] ?? null;
+    });
   } catch (error) {
     console.error('Database error in activateHouseholdProfile:', error);
     throw new Error('Unable to activate household profile.', { cause: error });

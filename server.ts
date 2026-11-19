@@ -187,8 +187,8 @@ function mapGeminiError(error: unknown): { status: number; message: string } {
   };
 }
 
-async function startServer() {
-  const app = express();
+const app = express();
+async function configureApp(app: express.Express) {
   app.disable('x-powered-by');
   app.use((_req, res, next) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -450,6 +450,16 @@ async function startServer() {
       res.status(500).json({
         error: error instanceof Error ? error.message : 'Failed to load household workspace.',
       });
+    }
+  });
+
+  app.get('/api/user/profiles', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const workspace = await getUserWorkspace(req.user!.uid);
+      res.json({ profiles: workspace.profiles });
+    } catch (error) {
+      console.error('Failed to load household profiles:', error);
+      res.status(500).json({ error: 'Failed to load household profiles.' });
     }
   });
 
@@ -737,27 +747,47 @@ async function startServer() {
     }
   });
 
-  if (!isProduction) {
+  if (!isProduction && process.env.VERCEL !== '1') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
-    const distDir = path.resolve(__dirname, 'dist');
-    app.use(express.static(distDir));
-    app.get('*', (_req, res) => {
-      res.sendFile(path.join(distDir, 'index.html'));
-    });
+  } else if (process.env.VERCEL !== '1') {
+    app.use(express.static(path.resolve(__dirname, 'public')));
   }
 
+  // Keep API misses and middleware errors JSON; only browser routes receive the SPA shell.
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'API route not found.' });
+  });
+  app.use((error: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const status = error && typeof error === 'object' && 'status' in error
+      ? Number((error as { status?: unknown }).status)
+      : 500;
+    console.error('Request failed:', error instanceof Error ? error.message : 'Unknown request error');
+    if (req.path.startsWith('/api/')) {
+      res.status(status >= 400 && status < 600 ? status : 500).json({
+        error: status === 400 ? 'Invalid request body.' : 'Internal server error.',
+      });
+      return;
+    }
+    res.status(500).send('Internal server error.');
+  });
+
+  app.get('*', (_req, res) => {
+    const indexPath = path.resolve(__dirname, 'public/index.html');
+    res.sendFile(indexPath);
+  });
+
+}
+
+await configureApp(app);
+export default app;
+
+if (process.env.VERCEL !== '1') {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Urban Air Quality Assistant server listening on http://localhost:${PORT}`);
   });
 }
-
-startServer().catch((err) => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
