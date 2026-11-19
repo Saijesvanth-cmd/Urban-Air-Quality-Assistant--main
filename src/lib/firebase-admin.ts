@@ -3,9 +3,7 @@ import { getAuth } from 'firebase-admin/auth';
 import firebaseConfig from '../../firebase-applet-config.json' with { type: 'json' };
 
 if (!getApps().length) {
-  if (process.env.VERCEL === '1' && !process.env.FIREBASE_SERVICE_ACCOUNT) {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT must be configured for Firebase Admin on Vercel.');
-  }
+  
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
   if (serviceAccountJson) {
     let serviceAccount: Record<string, unknown>;
