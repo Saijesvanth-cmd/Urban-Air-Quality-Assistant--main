@@ -4,5 +4,14 @@
   "framework": "express",
   "bunVersion": "1.x",
   "installCommand": "bun install --frozen-lockfile",
-  "buildCommand": "bun run build"
+  "buildCommand": "bun run build",
+  "functions": {
+    "server.ts": {
+      "includeFiles": [
+        "src/**/*.ts",
+        "firebase-applet-config.json",
+        "public/index.html"
+      ]
+    }
+  }
 }
